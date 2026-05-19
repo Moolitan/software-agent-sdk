@@ -278,12 +278,20 @@ class TerminalTool(ToolDefinition[TerminalAction, TerminalObservation]):
                 full_output_save_dir=conv_state.env_observation_persistence_dir,
             )
 
+        # Add working directory information to the tool description
+        # to guide the agent to use the correct directory
+        enhanced_description = (
+            f"{TOOL_DESCRIPTION}\n"
+            f"Your working directory is: {working_dir}\n"
+            f"Always use this directory when creating or reading files."
+        )
+
         # Initialize the parent ToolDefinition with the executor
         return [
             cls(
                 action_type=TerminalAction,
                 observation_type=TerminalObservation,
-                description=TOOL_DESCRIPTION,
+                description=enhanced_description,
                 annotations=ToolAnnotations(
                     title="terminal",
                     readOnlyHint=False,

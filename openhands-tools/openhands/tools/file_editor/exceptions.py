@@ -1,10 +1,27 @@
+from enum import Enum
+
+
+class ToolErrorType(str, Enum):
+    """Classification of tool errors for targeted recovery guidance."""
+
+    REPLACEMENT_MISMATCH = "replacement_mismatch"
+    UNSUPPORTED_EDIT_TARGET = "unsupported_edit_target"
+    EXECUTION_FAILURE = "execution_failure"
+
+
 class ToolError(Exception):
     """Raised when a tool encounters an error."""
 
     message: str
+    error_type: ToolErrorType
 
-    def __init__(self, message: str):
+    def __init__(
+        self,
+        message: str,
+        error_type: ToolErrorType = ToolErrorType.EXECUTION_FAILURE,
+    ):
         self.message = message
+        self.error_type = error_type
         super().__init__(message)
 
     def __str__(self):
@@ -47,8 +64,14 @@ class FileValidationError(ToolError):
     path: str
     reason: str
 
-    def __init__(self, path: str, reason: str):
+    def __init__(
+        self,
+        path: str,
+        reason: str,
+        error_type: ToolErrorType = ToolErrorType.EXECUTION_FAILURE,
+    ):
         self.path = path
         self.reason = reason
+        self.error_type = error_type
         self.message: str = f"File validation failed for {path}: {reason}"
-        super().__init__(self.message)
+        super().__init__(self.message, error_type=error_type)

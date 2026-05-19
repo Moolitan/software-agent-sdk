@@ -174,6 +174,7 @@ class AgentContext(BaseModel):
         llm_model: str | None = None,
         llm_model_canonical: str | None = None,
         additional_secret_infos: list[dict[str, str | None]] | None = None,
+        working_dir: str | None = None,
     ) -> str | None:
         """Get the system message with repo skill content and custom suffix.
 
@@ -261,6 +262,7 @@ class AgentContext(BaseModel):
             or secret_infos
             or available_skills_prompt
             or formatted_datetime
+            or working_dir
         )
         if has_content:
             formatted_text = render_template(
@@ -271,6 +273,7 @@ class AgentContext(BaseModel):
                 secret_infos=secret_infos,
                 available_skills_prompt=available_skills_prompt,
                 current_datetime=formatted_datetime,
+                working_dir=working_dir,
             ).strip()
             return formatted_text
         elif self.system_message_suffix and self.system_message_suffix.strip():

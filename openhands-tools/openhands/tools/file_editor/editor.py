@@ -21,6 +21,7 @@ from openhands.tools.file_editor.exceptions import (
     EditorToolParameterMissingError,
     FileValidationError,
     ToolError,
+    ToolErrorType,
 )
 from openhands.tools.file_editor.utils.config import SNIPPET_CONTEXT_WINDOW
 from openhands.tools.file_editor.utils.constants import (
@@ -127,12 +128,14 @@ class FileEditor:
             if new_str is None:
                 raise EditorToolParameterMissingError(command, "new_str")
             if new_str == old_str:
-                raise EditorToolParameterInvalidError(
+                err = EditorToolParameterInvalidError(
                     "new_str",
                     new_str,
                     "No replacement was performed. `new_str` and `old_str` must be "
                     "different.",
                 )
+                err.error_type = ToolErrorType.REPLACEMENT_MISMATCH
+                raise err
             return self.str_replace(_path, old_str, new_str)
         elif command == "insert":
             if insert_line is None:
@@ -219,13 +222,15 @@ class FileEditor:
             if not occurrences:
                 raise ToolError(
                     f"No replacement was performed, old_str `{old_str}` did not "
-                    f"appear verbatim in {path}."
+                    f"appear verbatim in {path}.",
+                    error_type=ToolErrorType.REPLACEMENT_MISMATCH,
                 )
         if len(occurrences) > 1:
             line_numbers = sorted(set(line for line, _, _ in occurrences))
             raise ToolError(
                 f"No replacement was performed. Multiple occurrences of old_str "
-                f"`{old_str}` in lines {line_numbers}. Please ensure it is unique."
+                f"`{old_str}` in lines {line_numbers}. Please ensure it is unique.",
+                error_type=ToolErrorType.REPLACEMENT_MISMATCH,
             )
 
         # We found exactly one occurrence
@@ -658,6 +663,7 @@ class FileEditor:
                     "File appears to be binary and this file type cannot be read "
                     "or edited by this tool."
                 ),
+                error_type=ToolErrorType.UNSUPPORTED_EDIT_TARGET,
             )
 
     @with_encoding

@@ -99,7 +99,8 @@ class FileEditorObservation(Observation):
 
         if self.is_error:
             text.append("❌ ", style="red bold")
-            text.append(self.ERROR_MESSAGE_HEADER, style="bold red")
+            header = self._get_error_header()
+            text.append(header, style="bold red")
 
         if not self._has_meaningful_diff:
             return super().visualize
@@ -185,6 +186,23 @@ CRITICAL REQUIREMENTS FOR USING THIS TOOL:
 3. REPLACEMENT: The `new_str` parameter should contain the edited lines that replace the `old_str`. Both strings must be different.
 
 Remember: when making multiple file edits in a row to the same file, you should prefer to send all edits in a single message with multiple calls to this tool, rather than multiple messages with a single call each.
+
+FAILURE RECOVERY RULES:
+
+1. If a str_replace fails because old_str was not found verbatim, do NOT retry the same replacement. Instead:
+   - First re-read the file with command='view' to see the actual current content
+   - Then construct a new, smaller edit based on what is actually in the file
+   - Prefer small, targeted replacements over large block replacements
+
+2. If editing a binary or special-format file (.xlsx, .docx, .pptx, .pdf, etc.), do NOT use this tool. Instead:
+   - Check if a skill is available for that file type
+   - If so, use the skill-guided workflow
+   - Otherwise, write a script using an appropriate library
+
+3. When writing scripts to handle files, do NOT use `python -c "..."` with large inline code. Instead:
+   - Write the script to a .py file using command='create'
+   - Then execute it via the terminal tool
+   - This avoids quoting/escaping issues and makes the code inspectable
 """  # noqa: E501
 
 

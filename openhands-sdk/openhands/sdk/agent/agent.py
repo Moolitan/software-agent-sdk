@@ -13,6 +13,7 @@ from openhands.sdk.agent.utils import (
     fix_malformed_tool_arguments,
     make_llm_completion,
     prepare_llm_messages,
+    repair_truncated_json,
     sanitize_json_control_chars,
 )
 from openhands.sdk.conversation import (
@@ -392,6 +393,7 @@ class Agent(CriticMixin, AgentBase):
             llm_model=self.llm.model,
             llm_model_canonical=self.llm.model_canonical_name,
             additional_secret_infos=secret_infos,
+            working_dir=str(state.workspace.working_dir),
         )
 
     def _execute_actions(
@@ -780,8 +782,17 @@ class Agent(CriticMixin, AgentBase):
             try:
                 arguments = json.loads(tool_call.arguments)
             except json.JSONDecodeError:
-                sanitized_args = sanitize_json_control_chars(tool_call.arguments)
-                arguments = json.loads(sanitized_args)
+                try:
+                    sanitized_args = sanitize_json_control_chars(tool_call.arguments)
+                    arguments = json.loads(sanitized_args)
+                    # 将清理后的 JSON 写回 tool_call，避免截断字符串污染对话历史
+                    tool_call.arguments = sanitized_args
+                except json.JSONDecodeError:
+                    # Last resort: repair truncated/malformed JSON
+                    # (e.g. model hit max tokens and output was cut off)
+                    arguments = repair_truncated_json(tool_call.arguments)
+                    # 将修复后的 JSON 写回 tool_call，避免截断字符串污染对话历史
+                    tool_call.arguments = json.dumps(arguments, ensure_ascii=False)
 
             # Fix malformed arguments (e.g., JSON strings for list/dict fields)
             arguments = fix_malformed_tool_arguments(arguments, tool.action_type)

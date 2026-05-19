@@ -41,6 +41,55 @@ def _escape_control_char(m: re.Match[str]) -> str:
     return _CTRL_ESCAPE_TABLE.get(ord(ch), f"\\u{ord(ch):04x}")
 
 
+def repair_truncated_json(raw: str) -> dict[str, Any]:
+    """Try to repair truncated or malformed JSON from LLM tool call output.
+
+    Handles common cases:
+    - Truncated output (model hit max tokens): close open strings/braces
+    - Unescaped quotes inside string values
+    """
+    s = raw.strip()
+
+    # Ensure it starts with {
+    if not s.startswith("{"):
+        raise json.JSONDecodeError("Not a JSON object", s, 0)
+
+    # Try progressively aggressive repairs:
+
+    # 1) Close truncated JSON: append missing `"}` or `}`
+    for suffix in ['"}', '"}]}', '"}}', "}"]:
+        try:
+            return json.loads(s + suffix)
+        except json.JSONDecodeError:
+            pass
+
+    # 2) For single-key objects like {"message": "...truncated},
+    #    extract the key-value via regex
+    m = re.match(r'\{\s*"(\w+)"\s*:\s*"', s)
+    if m:
+        key = m.group(1)
+        # Everything after the opening quote of the value
+        val_start = m.end()
+        val_body = s[val_start:]
+        # Strip trailing incomplete escapes / unclosed braces
+        val_body = val_body.rstrip("\\")
+        # Remove trailing `"}` if present, otherwise take as-is
+        if val_body.endswith('"}'):
+            val_body = val_body[:-2]
+        elif val_body.endswith('"'):
+            val_body = val_body[:-1]
+        # Escape any unescaped internal quotes (skip already-escaped ones)
+        val_body = re.sub(r'(?<!\\)"', '\\"', val_body)
+        try:
+            return json.loads("{" + f'"{key}": "{val_body}"' + "}")
+        except json.JSONDecodeError:
+            pass
+
+    # 3) Last resort: strip everything non-parseable and return minimal
+    #    This handles the case where we just can't fix it
+    raise json.JSONDecodeError("Cannot repair JSON", s, 0)
+
+
 def sanitize_json_control_chars(raw: str) -> str:
     """Escape raw control characters in a JSON string produced by an LLM.
 

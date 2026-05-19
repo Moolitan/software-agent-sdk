@@ -268,7 +268,30 @@ class Action(Schema, ABC):
 class Observation(Schema, ABC):
     """Base schema for output observation."""
 
+    # Legacy generic header — only used for unclassified execution_failure errors
     ERROR_MESSAGE_HEADER: ClassVar[str] = "[An error occurred during execution.]\n"
+
+    # Error-type-aware headers: keyed by error_type string value
+    ERROR_HEADERS: ClassVar[dict[str, str]] = {
+        "replacement_mismatch": (
+            "[Text replacement failed: the target text was not found "
+            "verbatim in the file.]\n"
+            "RECOVERY: You MUST re-read the file to see its current content, "
+            "then construct a new edit based on the actual text. "
+            "Do NOT retry the same old_str. Use smaller, more targeted "
+            "replacements instead of large block replacements.\n"
+        ),
+        "unsupported_edit_target": (
+            "[Unsupported file format for text editing.]\n"
+            "This file is a binary or special format (e.g., .xlsx, .docx, "
+            ".pptx, .pdf) that cannot be edited with the text editor tool.\n"
+            "RECOVERY: Do NOT retry file_editor on this file. "
+            "Check if a skill is available for this file type and use the "
+            "skill-guided workflow. If no skill exists, use an appropriate "
+            "programmatic method (e.g., a script) to handle this file format.\n"
+        ),
+        "execution_failure": "[An error occurred during execution.]\n",
+    }
 
     content: list[TextContent | ImageContent] = Field(
         default_factory=list,
@@ -280,6 +303,14 @@ class Observation(Schema, ABC):
     )
     is_error: bool = Field(
         default=False, description="Whether the observation indicates an error"
+    )
+    error_type: str | None = Field(
+        default=None,
+        description=(
+            "Classified error type when is_error is True. "
+            "One of: replacement_mismatch, unsupported_edit_target, "
+            "execution_failure, or None."
+        ),
     )
 
     @classmethod
@@ -312,6 +343,12 @@ class Observation(Schema, ABC):
             item.text for item in self.content if isinstance(item, TextContent)
         )
 
+    def _get_error_header(self) -> str:
+        """Get the appropriate error header based on error_type."""
+        if self.error_type and self.error_type in self.ERROR_HEADERS:
+            return self.ERROR_HEADERS[self.error_type]
+        return self.ERROR_MESSAGE_HEADER
+
     @property
     def to_llm_content(self) -> Sequence[TextContent | ImageContent]:
         """
@@ -320,9 +357,9 @@ class Observation(Schema, ABC):
         """
         llm_content: list[TextContent | ImageContent] = []
 
-        # If is_error is true, prepend error message
+        # If is_error is true, prepend classified error header with recovery guidance
         if self.is_error:
-            llm_content.append(TextContent(text=self.ERROR_MESSAGE_HEADER))
+            llm_content.append(TextContent(text=self._get_error_header()))
 
         # Add content (now always a list)
         llm_content.extend(self.content)
@@ -340,12 +377,14 @@ class Observation(Schema, ABC):
 
         if self.is_error:
             text.append("❌ ", style="red bold")
-            text.append(self.ERROR_MESSAGE_HEADER, style="bold red")
+            header = self._get_error_header()
+            text.append(header, style="bold red")
 
-        text_parts = content_to_str(self.to_llm_content)
-        if text_parts:
-            full_content = "".join(text_parts)
+        # Show only the content items (skip header which is already rendered above)
+        content_parts = content_to_str(self.content)
+        if content_parts:
+            full_content = "".join(content_parts)
             text.append(full_content)
-        else:
+        elif not self.is_error:
             text.append("[no text content]")
         return text

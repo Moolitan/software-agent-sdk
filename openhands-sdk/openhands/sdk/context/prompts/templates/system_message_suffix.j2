@@ -1,3 +1,9 @@
+{% if working_dir %}
+<WORKING_DIRECTORY>
+Your working directory is: {{ working_dir }}
+Always use this directory as the base for all file operations. Do NOT use other directories unless explicitly instructed.
+</WORKING_DIRECTORY>
+{% endif %}
 {% if current_datetime %}
 <CURRENT_DATETIME>
 The current date and time is: {{ current_datetime }}
@@ -20,6 +26,9 @@ Please follow them while working.
 The following skills are available and may be triggered by keywords or task types in your messages.
 When a skill is triggered, you will receive additional context and instructions.
 You can also directly look up a skill's full content by reading its location path, and use the skill's guidance proactively when relevant to your task.
+
+IMPORTANT: Skills are NOT tools. Do NOT attempt to call a skill by name as a tool/function call.
+Skills are reference documentation only. To use a skill, read its SKILL.md file at the location path shown below using the file_editor tool, then follow the guidance in that file.
 
 {{ available_skills_prompt }}
 </SKILLS>
